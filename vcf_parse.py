@@ -11,7 +11,7 @@
 #
 
 import os, re, sys, random, operator
-import argparse, random
+import argparse, random, shutil
 
 def nc_nucleotide(nuc):
    if 'A' in nuc and 'G' in nuc:
@@ -39,9 +39,10 @@ def create_bait(bait, sn):
    return bait_d
 
 def pop_checks(vl, sl, pops, tc):
+   ind = vl[0].split(':').index('DP')
    pc = {}
-   for x in range(0,len(vl)):
-      if int(vl[x].split(':')[1]) >= min_seq and sl[x] in pops.keys(): 
+   for x in range(1,len(vl)-1):
+      if int(vl[x].split(':')[ind]) >= min_seq and sl[x] in pops.keys(): 
          if pops[sl[x]] in pc.keys():
             pc[pops[sl[x]]] = pc[pops[sl[x]]] + 1
          else:
@@ -82,6 +83,8 @@ parser.add_argument('-mpc',  '--min_pop_coverage', metavar="FLOAT", dest="mpc", 
 parser.add_argument('-snp', '--snp_selection', metavar="STR", dest="snp_select", help='The number of SNPs returned per locus. Can either be first, random, or all.  Default=all', )
 parser.add_argument('-ic', '--ignore_chromosome', metavar="LIST", dest="ign_list", nargs='+', help='A list of chromosomes to ignore while processing the VCF file.  Example -ic chr1 chr2')
 parser.add_argument('-cf', '--chromosome_file', metavar="FILENAME", dest="chromo_file", help='A file containing the order of the chromosomes for the chromosomal sort function')
+parser.add_argument('-d', '--delete_folder', dest="delete_folder", action='store_true', help='A boolean flag to remove folder if present and replace with new output folder')
+
 
 args = parser.parse_args()
 
@@ -104,6 +107,10 @@ if args.ign_list:
    ign_list = args.ign_list
 if args.all_count:
    all_count = args.all_count
+if args.delete_folder:
+   delete_folder = True
+else:
+   delete_folder = False
 if args.snp_select:
    if args.snp_select in ['all','first','random']:
       snp_select = args.snp_select
@@ -128,7 +135,16 @@ if '/' in fn_in:
 else:
    file_root = fn_in[0:-4]       #Creates root output file name
 
-os.mkdir(direc)
+
+if not os.path.isdir(direc):
+   os.mkdir(direc)
+elif os.path.isdir and delete_folder:
+   shutil.rmtree(direc)
+   os.mkdir(direc)
+else:
+   print('Output directory exists already.')
+   sys.exit()
+
 
 bait_dict = {}
 chromo_list = {}
@@ -230,12 +246,12 @@ with open(fn_in) as f:
          for a in adl:
             if int(a) > mtalc:
                mtalc = int(a) 
-         if '<*>' != sl[4] and len(sl[4].split(',')) < 3 and mtalc >= all_count and  pop_checks(sl[9:], sample_names, popmap, pop_tc):
+         if '<*>' != sl[4] and len(sl[4].split(',')) < 3 and mtalc >= all_count and  pop_checks(sl[8:], sample_names, popmap, pop_tc):
             vcf_out.write(line)
             snp_list.append(line)
          else:
             vcf_bad_out.write(line)
-      elif 'INDEL' in sl[7] and len(sl[4].split(',')) == 1 and not any(s in sl[0] for s in ign_list) and not any(s in bait2chromo[sl[0]] for s in ign_list) and pop_checks(sl[9:], sample_names, popmap, pop_tc):
+      elif 'INDEL' in sl[7] and len(sl[4].split(',')) == 1 and not any(s in sl[0] for s in ign_list) and not any(s in bait2chromo[sl[0]] for s in ign_list) and pop_checks(sl[8:], sample_names, popmap, pop_tc):
          indel_list.append(line)
    elif line.startswith('#C'):
       vcf_out.write(line)
@@ -310,6 +326,10 @@ for line in indel_list:
 #Processing the SNPs
 good_snp_count = 0
 print('Processing the SNPs... %s SNPs'%len(snp_list))
+
+DP_Loc = snp_list[0].split('\t')[8].split(':').index('DP')
+AD_Loc = snp_list[0].split('\t')[8].split(':').index('AD')
+
 for line in snp_list[0:]:
    sl = line.split('\t')
    if sl[0] not in bait_dict.keys():
@@ -324,9 +344,9 @@ for line in snp_list[0:]:
    for x in range(0,len(sample_names)):
       if sample_names[x] in popmap.keys():
          il = sl[9+x].split(':')
-         cl = il[2].split(',')
-         sam_dp = int(il[1])
-         if int(cl[0]) > min_seq and int(cl[1]) > all_count and (float(cl[1])/float(il[1])) >= (1-cutoff):
+         cl = il[AD_Loc].split(',')
+         sam_dp = int(il[DP_Loc])
+         if int(cl[0]) > min_seq and int(cl[1]) > all_count and (float(cl[1])/float(il[DP_Loc])) >= (1-cutoff):
             if '-' not in bait_dict[sl[0]][4][x][n] and '-' not in bait_dict[sl[0]][5][x][n]:
                tmp = bait_dict[sl[0]][3][x]
                tmp[n] = sl[4].split(',')[0]
@@ -348,7 +368,7 @@ for line in snp_list[0:]:
             if n not in bait_dict[sl[0]][6]:
                bait_dict[sl[0]][6].append(n)
                bait_dict[sl[0]][7] = 1
-         elif int(cl[0]) > min_seq and int(cl[1]) > all_count and (float(cl[1])/float(il[1])) >= cutoff:
+         elif int(cl[0]) > min_seq and int(cl[1]) > all_count and (float(cl[1])/float(il[DP_Loc])) >= cutoff:
             if '-' not in bait_dict[sl[0]][4][x][n] and '-' not in bait_dict[sl[0]][5][x][n]:
                tmp =bait_dict[sl[0]][3][x]
                tmp[n] = nc_nucleotide([sl[3],sl[4].split(',')[0]])
@@ -383,12 +403,13 @@ for line in snp_list[0:]:
             tmp = bait_dict[sl[0]][5][x]
             tmp[n] = '?'
             bait_dict[sl[0]][5][x] = tmp
-         elif int(cl[0]) > min_seq and int(cl[1]) > all_count and (float(cl[1])/float(il[1])) >= cutoff and (bait_dict[sl[0]][4][x][n] == '-' or bait_dict[sl[0]][5][x][n] == '-'):
+         elif int(cl[0]) > min_seq and int(cl[1]) > all_count and (float(cl[1])/float(il[DP_Loc])) >= cutoff and (bait_dict[sl[0]][4][x][n] == '-' or bait_dict[sl[0]][5][x][n] == '-'):
             print(line)
 
 print('Finished processing input file...\nStarting to generate output files...')
 
 print('Before bait sort')
+print(chromo_list.keys())
 if len(chromo_list) != 1 and not chromo_list.keys()[0] == 'UN':
    for chr in chromo_list:
       b = chromo_list[chr]
