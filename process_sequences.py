@@ -50,7 +50,6 @@ mapdamage_log = open('%s/bait_run_log.txt'%outdir,'w')
 print('Starting to process sequences.')
 
 file_names = os.listdir(raw)
-print(file_names)
 acc = []
 for fn in file_names:
    if fn[0] != '.':
@@ -76,9 +75,7 @@ for fn in file_names:
          mapdamage_log.write(''.join(process.stdout.readlines()))
          mapdamage_log.write(''.join(process.stderr.readlines()))
 
-print('There are %s files to process.'%len(acc))
-
-print(acc)
+print('There are %s samples to process.'%len(acc))
 
 mpileup_comm = '%s mpileup -a -g -Q 30 -q 25 -t AD,DP,INFO/AD -u -v -o %s/PROJECT.sorted.bam.vcf -f %s'%(SAM,outdir,bait_ref)
 
