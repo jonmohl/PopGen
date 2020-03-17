@@ -1,3 +1,6 @@
+This version was developed for the following citation:
+P Lavretsky, et al. (2020) Assessing changes in genomic divergence following a century of human‐mediated secondary contact among wild and captive‐bred ducks. Molecular ecology 29(3):578-595
+
 usage: process_sequences.py [-h] -i DIRNAME -b FILENAME -o DIRNAME
                             [-a FILENAME] [-t INT]
 
