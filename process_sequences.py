@@ -1,3 +1,4 @@
+#!/bin/python
 #Created to process multiple sequencing files including a mapDamage check.
 #UpdatedNovember 2, 2018
 #Jon Mohl
@@ -10,6 +11,7 @@ TRIM='java -jar /usr/local/Trimmomatic-0.36/trimmomatic-0.36.jar'
 BWA='/usr/local/bwa-0.7.15/bwa'
 MAP='/usr/bin/mapDamage'
 SAM='/usr/local/samtools-1.6/samtools'
+BCF='/usr/local/bin/bcftools'
 
 #Create arg parser to allow for input of parameters
 parser = argparse.ArgumentParser(description='Processing Bait Sequencing Files')
@@ -58,8 +60,10 @@ for fn in file_names:
             comm = '%s PE -threads %s -phred33 %s/%s %s/%s %s/trimmed/%s_R1.tp.fastq.gz %s/trimmed/%s_R1.tu.fastq.gz %s/trimmed/%s_R2.tp.fastq.gz %s/trimmed/%s_R2.tu.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,raw,fn,raw,fn2,outdir,fn.split('_R1')[0],outdir,fn.split('_R1')[0],outdir,fn.split('_R1')[0],outdir,fn.split('_R1')[0])
             process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             process.wait()
-            mapdamage_log.write(''.join(process.stdout.readlines()))
-            mapdamage_log.write(''.join(process.stderr.readlines()))
+            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+            #mapdamage_log.write(''.join(process.stdout.readlines()))
+            #mapdamage_log.write(''.join(process.stderr.readlines()))
       elif not PE:
          if 'fastq' in fn.split('.'):
             acc.append(fn.split('.')[0])
@@ -72,12 +76,14 @@ for fn in file_names:
          if start_at == 1:
             process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             process.wait()
-            mapdamage_log.write(''.join(process.stdout.readlines()))
-            mapdamage_log.write(''.join(process.stderr.readlines()))
+            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+            #mapdamage_log.write(''.join(process.stdout.readlines()))
+            #mapdamage_log.write(''.join(process.stderr.readlines()))
 
 print('There are %s samples to process.'%len(acc))
 
-mpileup_comm = '%s mpileup -a -g -Q 30 -q 25 -t AD,DP,INFO/AD -u -v -o %s/PROJECT.sorted.bam.vcf -f %s'%(SAM,outdir,bait_ref)
+mpileup_comm = '%s mpileup -a -g -Q 30 -q 25 -t AD,DP,INFO/AD -f %s '%(SAM,bait_ref)
 
 ancient_list = []
 
@@ -106,8 +112,10 @@ for a in acc:
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
       mapdamage_log.write('bwa command: %s\n'%comm)
-      mapdamage_log.write(''.join(process.stdout.readlines()))
-      mapdamage_log.write(''.join(process.stderr.readlines()))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+      #mapdamage_log.write(''.join(process.stdout.readlines()))
+      #mapdamage_log.write(''.join(process.stderr.readlines()))
 
    if a in ancient_list and start_at <= 3:
       if not os.path.exists('%s/aligned_prescale'%outdir):
@@ -119,15 +127,19 @@ for a in acc:
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
       mapdamage_log.write('Move bam file for mapDamage command: %s\n'%comm)
-      mapdamage_log.write(''.join(process.stdout.readlines()))
-      mapdamage_log.write(''.join(process.stderr.readlines()))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+      #mapdamage_log.write(''.join(process.stdout.readlines()))
+      #mapdamage_log.write(''.join(process.stderr.readlines()))
 
       #comm = '%s -i %s/aligned_prescale/%s.bwa.sam -r %s --rescale -d %s/mapdamage/%s --merge-reference-sequences'%(MAP,outdir,a,bait_ref,outdir,a)
       comm = '%s -i %s/aligned_prescale/%s.bwa.sam --rescale -r %s -d %s/mapdamage/%s --merge-reference-sequences'%(MAP,outdir,a,bait_ref,outdir,a)
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
-      pso = process.stdout.readlines()
-      pse = process.stderr.readlines()
+      pso = [x.decode('utf-8') for x in iter(process.stdout.readlines())]
+      pse = [x.decode('utf-8') for x in iter(process.stderr.readlines())]
+      #pso = process.stdout.readlines()
+      #pse = process.stderr.readlines()
       mapdamage_log.write('mapDamage command: %s\n'%comm)
       mapdamage_log.write(''.join(pso))
       mapdamage_log.write(''.join(pse))
@@ -146,8 +158,10 @@ for a in acc:
          process.wait()
          mapdamage_log.write('Return corrected bam file to command: %s\n'%comm)
          print('No adjustment made on sample')
-         mapdamage_log.write(''.join(process.stdout.readlines()))
-         mapdamage_log.write(''.join(process.stderr.readlines()))
+         mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+         mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+         #mapdamage_log.write(''.join(process.stdout.readlines()))
+         #mapdamage_log.write(''.join(process.stderr.readlines()))
       else:
          mapdamage_log.write('%s was rescaled.\n'%a)
          comm = '%s view -h -o %s/aligned/%s.bwa.sam %s/mapdamage/%s/%s.bwa.rescaled.bam '%(SAM,outdir,a,outdir,a,a)
@@ -155,8 +169,10 @@ for a in acc:
          process.wait()
          print('MapDamage adjustment made on sample')
          mapdamage_log.write('samtools view command: %s\n'%comm)
-         mapdamage_log.write(''.join(process.stdout.readlines()))
-         mapdamage_log.write(''.join(process.stderr.readlines()))
+         mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+         mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+         #mapdamage_log.write(''.join(process.stdout.readlines()))
+         #mapdamage_log.write(''.join(process.stderr.readlines()))
       print('After mapdamage')      
 
    if start_at <= 4:
@@ -166,8 +182,10 @@ for a in acc:
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
       mapdamage_log.write('samtools rmdup command: %s\n'%comm)
-      mapdamage_log.write(''.join(process.stdout.readlines()))
-      mapdamage_log.write(''.join(process.stderr.readlines()))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+      #mapdamage_log.write(''.join(process.stdout.readlines()))
+      #mapdamage_log.write(''.join(process.stderr.readlines()))
 
    if start_at <= 5:
       if not os.path.exists('%s/sorted'%outdir):
@@ -176,15 +194,19 @@ for a in acc:
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
       mapdamage_log.write('samtools sort command: %s\n'%comm)
-      mapdamage_log.write(''.join(process.stdout.readlines()))
-      mapdamage_log.write(''.join(process.stderr.readlines()))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+      #mapdamage_log.write(''.join(process.stdout.readlines()))
+      #mapdamage_log.write(''.join(process.stderr.readlines()))
 
       comm = '%s index %s/sorted/%s.sorted.bam'%(SAM,outdir,a)
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
       mapdamage_log.write('samtools index command: %s\n'%comm)
-      mapdamage_log.write(''.join(process.stdout.readlines()))
-      mapdamage_log.write(''.join(process.stderr.readlines()))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+      mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+      #mapdamage_log.write(''.join(process.stdout.readlines()))
+      #mapdamage_log.write(''.join(process.stderr.readlines()))
 
    mpileup_comm += ' %s/sorted/%s.sorted.bam'%(outdir,a)
 
@@ -193,11 +215,16 @@ for a in acc:
 
 if start_at <= 6:
    print('Starting samtools mpileup command...')
+
+   mpileup_comm += '| %s call --threads %s  -m -O v -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
+
    mapdamage_log.write('mpileup command: %s\n'%mpileup_comm)
    process = subprocess.Popen(mpileup_comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
    process.wait()
-   mapdamage_log.write(''.join(process.stdout.readlines()))
-   mapdamage_log.write(''.join(process.stderr.readlines()))
+   mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+   mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+   #mapdamage_log.write(''.join(process.stdout.readlines()))
+   #mapdamage_log.write(''.join(process.stderr.readlines()))
 
 mapdamage_log.write('Completed.')
 mapdamage_log.close()
