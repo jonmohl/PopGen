@@ -7,11 +7,11 @@ import os,subprocess
 import sys
 import argparse
 
-TRIM='java -jar /usr/local/Trimmomatic-0.36/trimmomatic-0.36.jar'
+TRIM='java -jar /usr/local/Trimmomatic-0.38/trimmomatic-0.38.jar'
 BWA='/usr/local/bwa-0.7.15/bwa'
-MAP='/usr/bin/mapDamage'
+MAP='/usr/local/mapDamage/mapdamage'
 SAM='/usr/local/samtools-1.6/samtools'
-BCF='/usr/local/bin/bcftools'
+BCF='/usr/local/bcftools/bcftools'
 
 #Create arg parser to allow for input of parameters
 parser = argparse.ArgumentParser(description='Processing Bait Sequencing Files')
@@ -83,7 +83,7 @@ for fn in file_names:
 
 print('There are %s samples to process.'%len(acc))
 
-mpileup_comm = '%s mpileup -a -g -Q 30 -q 25 -t AD,DP,INFO/AD -f %s '%(SAM,bait_ref)
+mpileup_comm = '%s mpileup -Ou -Q 30 -q 25 -a AD,DP,INFO/AD -f %s '%(BCF,bait_ref)
 
 ancient_list = []
 
@@ -216,7 +216,7 @@ for a in acc:
 if start_at <= 6:
    print('Starting samtools mpileup command...')
 
-   mpileup_comm += '| %s call --threads %s  -m -O v -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
+   mpileup_comm += '| %s call --threads %s -m -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
 
    mapdamage_log.write('mpileup command: %s\n'%mpileup_comm)
    process = subprocess.Popen(mpileup_comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
