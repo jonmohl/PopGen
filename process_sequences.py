@@ -83,7 +83,7 @@ for fn in file_names:
 
 print('There are %s samples to process.'%len(acc))
 
-mpileup_comm = '%s mpileup -Ou -Q 30 -q 25 -a AD,DP,INFO/AD -f %s '%(BCF,bait_ref)
+mpileup_comm = '%s mpileup -Ou -Q 30 -q 25 -a AD,DP,SP,INFO/AD -f %s '%(BCF,bait_ref)
 
 ancient_list = []
 
@@ -216,7 +216,7 @@ for a in acc:
 if start_at <= 6:
    print('Starting samtools mpileup command...')
 
-   mpileup_comm += '| %s call --threads %s -m -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
+   mpileup_comm += '| %s call --threads %s -f GQ,GP -m -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
 
    mapdamage_log.write('mpileup command: %s\n'%mpileup_comm)
    process = subprocess.Popen(mpileup_comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
