@@ -7,6 +7,7 @@ import os,subprocess
 import sys
 import argparse
 
+PEAR='/usr/local/pear-0.9.11/bin/pear'
 TRIM='java -jar /usr/local/Trimmomatic-0.38/trimmomatic-0.38.jar'
 BWA='/usr/local/bwa-0.7.15/bwa'
 MAP='/usr/local/mapDamage/mapdamage'
@@ -29,7 +30,10 @@ bait_ref = args.bait_ref
 outdir = args.outdir
 threads = args.threads
 ancient = args.anc_list
-start_at = int(args.start_at)
+if args.start_at:
+   start_at = int(args.start_at)
+else:
+   start_at = 1
 if args.PE:
    PE = True
 else:
@@ -51,35 +55,66 @@ print('Starting to process sequences.')
 
 file_names = os.listdir(raw)
 acc = []
-for fn in file_names:
-   if fn[0] != '.':
-      if PE and ('_R1' in fn):
-         acc.append(fn.split('_R1')[0])
-         if start_at == 1:
-            fn2 = fn.split('_R1')[0]+'_R2.fastq.gz'
-            comm = '%s PE -threads %s -phred33 %s/%s %s/%s %s/trimmed/%s_R1.tp.fastq.gz %s/trimmed/%s_R1.tu.fastq.gz %s/trimmed/%s_R2.tp.fastq.gz %s/trimmed/%s_R2.tu.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,raw,fn,raw,fn2,outdir,fn.split('_R1')[0],outdir,fn.split('_R1')[0],outdir,fn.split('_R1')[0],outdir,fn.split('_R1')[0])
-            process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            process.wait()
-            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
-            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-            #mapdamage_log.write(''.join(process.stdout.readlines()))
-            #mapdamage_log.write(''.join(process.stderr.readlines()))
-      elif not PE:
-         if 'fastq' in fn.split('.'):
-            acc.append(fn.split('.')[0])
-            comm = '%s SE -threads %s -phred33 %s/%s %s/trimmed/%s.trimmed.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,raw,fn,outdir,fn.split('.')[0])
-         else:
-            new_acc = fn[0:-3]
-            acc.append(new_acc)
 
-            comm = '%s SE -threads %s -phred33 %s/%s %s/trimmed/%s.trimmed.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,raw,fn,outdir,new_acc)
-         if start_at == 1:
+if PE:
+   os.mkdir('%s/merged'%outdir)
+   os.mkdir('%s/merged/tmp'%outdir)
+   for fn in file_names:
+      if fn[0] != '.':
+         if ('_R1' in fn) and fn[-3:] != '.gz':
+            acc.append(fn.split('_R1')[0])
+            fn2 = fn.split('_R1')[0]+'_R2.fastq'
+            comm = '/usr/local/pear-0.9.11/bin/pear -f %s/%s -r %s/%s -p 0.0001 -v 10 -m 0 -n 0 -q 25 -i -j %s -o merged/%s_merged.fastq'%(raw,fn,raw,fn2,threads,outdir,fn.split('_R1')[0])
+         elif '_R1' in fn:
+            acc.append(fn.split('_R1')[0])
+            fn2 = fn.replace('_R1','_R2')
+            if start_at == 1:
+               comm = 'cp %s/%s %s/merged/tmp/'%(raw,fn,outdir)
+               process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+               process.wait()
+               comm = 'cp %s/%s %s/merged/tmp/'%(raw,fn2,outdir)
+               process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+               process.wait()
+               comm = 'gunzip %s/merged/tmp/*.gz'%(outdir)
+               process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+               process.wait()
+               comm = '/usr/local/pear-0.9.11/bin/pear -f %s/merged/tmp/%s -r %s/merged/tmp/%s -p 0.0001 -v 10 -m 0 -n 0 -q 25 -i -j %s -o %s/merged/%s_merged.fq'%(outdir,fn[0:-3],outdir,fn2[0:-3],threads,outdir,fn.split('_R1')[0])
+         print(comm)
+         if '_R1' in fn and start_at == 1:
+            process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            process.wait()
+            comm = 'gzip %s/merged/*.fq'%outdir
+            print(comm)
             process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             process.wait()
             mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
             mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-            #mapdamage_log.write(''.join(process.stdout.readlines()))
-            #mapdamage_log.write(''.join(process.stderr.readlines()))
+            comm = '%s SE -threads %s -phred33 %s/merged/%s_merged.fq.gz %s/trimmed/%s.trimmed.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,outdir,acc[-1],outdir,acc[-1])
+            print(comm)
+            process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            process.wait()
+            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+            mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+   if start_at == 1:
+      comm = 'gzip %s/merged/tmp/*'
+      process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+      process.wait()
+
+else:
+   for fn in file_names:
+      if 'fastq' in fn.split('.'):
+         acc.append(fn.split('.')[0])
+         comm = '%s SE -threads %s -phred33 %s/%s %s/trimmed/%s.trimmed.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,raw,fn,outdir,fn.split('.')[0])
+      else:
+         new_acc = fn[0:-3]
+         acc.append(new_acc)
+         comm = '%s SE -threads %s -phred33 %s/%s %s/trimmed/%s.trimmed.fastq.gz SLIDINGWINDOW:5:30 MINLEN:30'%(TRIM,threads,raw,fn,outdir,new_acc)
+      if start_at == 1:
+         process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+         process.wait()
+         mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
+         mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
+
 
 print('There are %s samples to process.'%len(acc))
 
@@ -105,17 +140,14 @@ for a in acc:
    if start_at <= 2:
       if not os.path.exists('%s/aligned'%outdir):
          os.mkdir('%s/aligned'%outdir)
-      if PE:
-         comm = '%s mem -t %s %s -T 30 -I 1024 -w O %s/trimmed/%s_R1.tp.fastq.gz %s/trimmed/%s_R2.tp.fastq.gz> %s/aligned/%s.bwa.sam'%(BWA,threads,bait_ref,outdir,a,outdir,a,outdir,a)
-      else:
-         comm = '%s mem -t %s %s -T 30 -I 1024 -w O %s/trimmed/%s.trimmed.fastq.gz > %s/aligned/%s.bwa.sam'%(BWA,threads,bait_ref,outdir,a,outdir,a)
+
+      comm = '%s mem -t %s %s -T 30 -I 1024 -w O %s/trimmed/%s.trimmed.fastq.gz > %s/aligned/%s.bwa.sam'%(BWA,threads,bait_ref,outdir,a,outdir,a)
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
       process.wait()
       mapdamage_log.write('bwa command: %s\n'%comm)
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-      #mapdamage_log.write(''.join(process.stdout.readlines()))
-      #mapdamage_log.write(''.join(process.stderr.readlines()))
+
 
    if a in ancient_list and start_at <= 3:
       if not os.path.exists('%s/aligned_prescale'%outdir):
@@ -129,8 +161,7 @@ for a in acc:
       mapdamage_log.write('Move bam file for mapDamage command: %s\n'%comm)
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-      #mapdamage_log.write(''.join(process.stdout.readlines()))
-      #mapdamage_log.write(''.join(process.stderr.readlines()))
+
 
       #comm = '%s -i %s/aligned_prescale/%s.bwa.sam -r %s --rescale -d %s/mapdamage/%s --merge-reference-sequences'%(MAP,outdir,a,bait_ref,outdir,a)
       comm = '%s -i %s/aligned_prescale/%s.bwa.sam --rescale -r %s -d %s/mapdamage/%s --merge-reference-sequences'%(MAP,outdir,a,bait_ref,outdir,a)
@@ -138,8 +169,6 @@ for a in acc:
       process.wait()
       pso = [x.decode('utf-8') for x in iter(process.stdout.readlines())]
       pse = [x.decode('utf-8') for x in iter(process.stderr.readlines())]
-      #pso = process.stdout.readlines()
-      #pse = process.stderr.readlines()
       mapdamage_log.write('mapDamage command: %s\n'%comm)
       mapdamage_log.write(''.join(pso))
       mapdamage_log.write(''.join(pse))
@@ -160,8 +189,6 @@ for a in acc:
          print('No adjustment made on sample')
          mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
          mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-         #mapdamage_log.write(''.join(process.stdout.readlines()))
-         #mapdamage_log.write(''.join(process.stderr.readlines()))
       else:
          mapdamage_log.write('%s was rescaled.\n'%a)
          comm = '%s view -h -o %s/aligned/%s.bwa.sam %s/mapdamage/%s/%s.bwa.rescaled.bam '%(SAM,outdir,a,outdir,a,a)
@@ -171,8 +198,7 @@ for a in acc:
          mapdamage_log.write('samtools view command: %s\n'%comm)
          mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
          mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-         #mapdamage_log.write(''.join(process.stdout.readlines()))
-         #mapdamage_log.write(''.join(process.stderr.readlines()))
+
       print('After mapdamage')      
 
    if start_at <= 4:
@@ -184,8 +210,10 @@ for a in acc:
       mapdamage_log.write('samtools rmdup command: %s\n'%comm)
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-      #mapdamage_log.write(''.join(process.stdout.readlines()))
-      #mapdamage_log.write(''.join(process.stderr.readlines()))
+
+      comm = 'gzip %s/aligned/*.sam'
+      process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+      process.wait()
 
    if start_at <= 5:
       if not os.path.exists('%s/sorted'%outdir):
@@ -196,8 +224,6 @@ for a in acc:
       mapdamage_log.write('samtools sort command: %s\n'%comm)
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-      #mapdamage_log.write(''.join(process.stdout.readlines()))
-      #mapdamage_log.write(''.join(process.stderr.readlines()))
 
       comm = '%s index %s/sorted/%s.sorted.bam'%(SAM,outdir,a)
       process = subprocess.Popen(comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -205,8 +231,7 @@ for a in acc:
       mapdamage_log.write('samtools index command: %s\n'%comm)
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
       mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-      #mapdamage_log.write(''.join(process.stdout.readlines()))
-      #mapdamage_log.write(''.join(process.stderr.readlines()))
+
 
    mpileup_comm += ' %s/sorted/%s.sorted.bam'%(outdir,a)
 
@@ -216,15 +241,13 @@ for a in acc:
 if start_at <= 6:
    print('Starting samtools mpileup command...')
 
-   mpileup_comm += '| %s call --threads %s -f GQ,GP -m -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
+   mpileup_comm += '| %s call --threads %s -a GQ,GP -m -o %s/PROJECT.sorted.bam.vcf'%(BCF,threads,outdir)
 
    mapdamage_log.write('mpileup command: %s\n'%mpileup_comm)
    process = subprocess.Popen(mpileup_comm, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
    process.wait()
    mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stdout.readlines())]))
    mapdamage_log.write('\n'.join([x.decode('utf-8').rstrip('\n') for x in iter(process.stderr.readlines())]))
-   #mapdamage_log.write(''.join(process.stdout.readlines()))
-   #mapdamage_log.write(''.join(process.stderr.readlines()))
 
 mapdamage_log.write('Completed.')
 mapdamage_log.close()
